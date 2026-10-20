@@ -1,0 +1,19 @@
+{
+  "name": "Kopi & Resto Nusantara - POS F&B",
+  "short_name": "POS Nusantara",
+  "description": "Sistem Point of Sale (POS) dan Operasional Restoran/Kafe Lengkap Berbahasa Indonesia",
+  "start_url": "/pos",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#16a34a",
+  "categories": ["business", "food", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

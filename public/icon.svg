@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#16a34a" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#brandGrad)" />
+  <g fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" transform="translate(96, 96)">
+    <!-- Plate / Tray -->
+    <path d="M 30 240 Q 160 270 290 240 L 290 260 Q 160 290 30 260 Z" fill="#ffffff" fill-opacity="0.2" />
+    <!-- Cloche / Dome -->
+    <path d="M 40 230 C 40 100 280 100 280 230 Z" />
+    <!-- Handle -->
+    <circle cx="160" cy="85" r="20" fill="#ffffff" />
+    <!-- Steam / Sparkle -->
+    <path d="M 120 40 Q 130 20 140 40" stroke-width="16" />
+    <path d="M 160 30 Q 170 10 180 30" stroke-width="16" />
+    <path d="M 200 40 Q 210 20 220 40" stroke-width="16" />
+  </g>
+</svg>
