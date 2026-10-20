@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'next/navigation';
 import { usePosStore } from '@/lib/store/usePosStore';
 import { formatRupiah } from '@/lib/formatters';
 import { generateQrisPayload, generateQrCodeDataUrl } from '@/lib/qris/mockQris';
@@ -37,9 +38,17 @@ import {
  * @param {{ params: { token: string } }} props
  */
 export default function QrSelfOrderPage({ params }) {
-  // Support params unwrapping in Next.js 14/15
-  const unwrappedParams = React.use ? React.use(params) : params;
-  const token = unwrappedParams?.token;
+  const routeParams = useParams();
+
+  // Support params unwrapping safely across Next.js 14 and 15:
+  // In Next.js 15, params can be a Promise (thenable).
+  // In Next.js 14, params is a plain object. Calling React.use on a plain object throws:
+  // "Error: An unsupported type was passed to use(): [object Object]"
+  let resolvedParams = params;
+  if (params && typeof params.then === 'function' && typeof React.use === 'function') {
+    resolvedParams = React.use(params);
+  }
+  const token = routeParams?.token || resolvedParams?.token;
 
   const {
     outlet,
@@ -509,11 +518,10 @@ export default function QrSelfOrderPage({ params }) {
           <button
             type="button"
             onClick={() => setSelectedCategory('all')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm ${
-              selectedCategory === 'all'
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm ${selectedCategory === 'all'
                 ? 'bg-primary text-primary-foreground shadow-primary/20'
                 : 'bg-card border text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Semua Menu
           </button>
@@ -522,11 +530,10 @@ export default function QrSelfOrderPage({ params }) {
               key={cat.id}
               type="button"
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm ${
-                selectedCategory === cat.id
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm ${selectedCategory === cat.id
                   ? 'bg-primary text-primary-foreground shadow-primary/20'
                   : 'bg-card border text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               {cat.name}
             </button>
@@ -554,9 +561,8 @@ export default function QrSelfOrderPage({ params }) {
               return (
                 <div
                   key={product.id}
-                  className={`bg-card border rounded-2xl p-3.5 shadow-sm flex items-center justify-between gap-3 transition-all ${
-                    !isAvailable ? 'opacity-50 grayscale' : 'hover:border-primary/40'
-                  }`}
+                  className={`bg-card border rounded-2xl p-3.5 shadow-sm flex items-center justify-between gap-3 transition-all ${!isAvailable ? 'opacity-50 grayscale' : 'hover:border-primary/40'
+                    }`}
                 >
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
@@ -703,11 +709,10 @@ export default function QrSelfOrderPage({ params }) {
                             key={option.id}
                             type="button"
                             onClick={() => handleToggleModifierOption(group, option)}
-                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-all ${
-                              isChecked
+                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-all ${isChecked
                                 ? 'bg-primary/10 border border-primary text-primary font-bold'
                                 : 'bg-muted/40 border border-transparent hover:bg-muted'
-                            }`}
+                              }`}
                           >
                             <span>{option.name}</span>
                             <span className="font-semibold">
