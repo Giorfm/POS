@@ -102,7 +102,7 @@ export default function PosTerminalPage() {
   // Pesanan aktif di meja terpilih
   const selectedTable = tables.find((t) => t.id === activeTableId);
   const activeOrder = orders.find(
-    (o) => o.table_id === activeTableId && (o.status === 'open' || o.status === 'sent')
+    (o) => o.table_id === activeTableId && o.status !== 'completed' && o.status !== 'cancelled'
   );
   const activeBill = activeOrder ? bills.find((b) => b.order_id === activeOrder.id && b.status === 'pending') : null;
 
@@ -429,7 +429,7 @@ export default function PosTerminalPage() {
                   const needsCleaning = t.status === 'needs_cleaning';
 
                   // Temukan order aktif di meja ini untuk menampilkan timer dan total
-                  const tableOrder = orders.find((o) => o.table_id === t.id && (o.status === 'open' || o.status === 'sent'));
+                  const tableOrder = orders.find((o) => o.table_id === t.id && o.status !== 'completed' && o.status !== 'cancelled');
                   const minutesActive = tableOrder ? getDurationMinutes(tableOrder.created_at) : 0;
 
                   let badgeColor = 'bg-emerald-500 text-white';

@@ -44,9 +44,23 @@ export default function KitchenDisplaySystemPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter pesanan aktif yang relevan untuk KDS (status: 'sent' atau 'ready', belum selesai 'completed')
+  // Filter pesanan aktif yang relevan untuk KDS (status: 'sent' atau 'ready', belum selesai 'completed' atau 'cancelled')
   const activeOrders = orders
-    .filter((o) => o.status === 'sent' || o.status === 'ready' || o.items.some((i) => i.status === 'preparing' || i.status === 'new'))
+    .filter((o) => {
+      if (o.status === 'completed' || o.status === 'cancelled') return false;
+
+      // Jika seluruh item sudah disajikan (served) atau dibatalkan (void), tiket selesai di dapur
+      const hasUnfinishedItems = o.items.some(
+        (i) => i.status === 'preparing' || i.status === 'new' || i.status === 'ready'
+      );
+      if (!hasUnfinishedItems) return false;
+
+      return (
+        o.status === 'sent' ||
+        o.status === 'ready' ||
+        o.items.some((i) => i.status === 'preparing' || i.status === 'new')
+      );
+    })
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()); // FIFO (First In First Out)
 
   const stations = ['all', 'Bar', 'Grill', 'Dessert', 'Kitchen'];

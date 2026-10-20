@@ -55,7 +55,7 @@ export default function TablesFloorPlanEditor() {
 
   const currentAreaTables = tables.filter((t) => t.area_id === activeAreaId);
   const selectedTable = tables.find((t) => t.id === selectedTableId);
-  const activeOrder = orders.find((o) => o.table_id === selectedTableId && (o.status === 'open' || o.status === 'sent'));
+  const activeOrder = orders.find((o) => o.table_id === selectedTableId && o.status !== 'completed' && o.status !== 'cancelled');
 
   // Drag & drop meja di denah visual
   const handleDragOver = (e) => {

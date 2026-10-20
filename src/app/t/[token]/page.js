@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { usePosStore } from '@/lib/store/usePosStore';
+import { usePosStore, notifyCrossTabSync } from '@/lib/store/usePosStore';
 import { formatRupiah } from '@/lib/formatters';
 import { generateQrisPayload, generateQrCodeDataUrl } from '@/lib/qris/mockQris';
 import { useToast } from '@/components/ui/Toaster';
@@ -98,6 +98,20 @@ export default function QrSelfOrderPage({ params }) {
     if (!mounted || !token) return null;
     return tables.find((t) => t.qr_token === token);
   }, [mounted, token, tables]);
+
+  // Jika meja tidak ditemukan di state lokal (misal perangkat baru/smartphone), coba ambil dari server
+  useEffect(() => {
+    if (mounted && token && !currentTable) {
+      fetch('/api/orders')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tables && Array.isArray(data.tables) && data.tables.length > 0) {
+            usePosStore.setState({ tables: data.tables });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [mounted, token, currentTable]);
 
   const currentArea = useMemo(() => {
     if (!currentTable) return null;
@@ -237,8 +251,13 @@ export default function QrSelfOrderPage({ params }) {
         const opt = modifierOptions.find((o) => o.id === id);
         if (opt) {
           chosenModifiers.push({
+            id: opt.id,
             optionId: opt.id,
+            group_id: opt.group_id,
+            name: opt.name,
+            name_snapshot: opt.name,
             nameSnapshot: opt.name,
+            price_delta: Number(opt.price_delta) || 0,
             priceDelta: Number(opt.price_delta) || 0,
           });
         }
@@ -359,7 +378,8 @@ export default function QrSelfOrderPage({ params }) {
 
         if (isPaidViaQris) {
           // Bayar langsung via QRIS
-          const orderBill = bills.find((b) => b.order_id === targetOrder.id);
+          const latestBills = usePosStore.getState().bills;
+          const orderBill = latestBills.find((b) => b.order_id === targetOrder.id);
           if (orderBill) {
             payBill(orderBill.id, {
               method: 'qris',
@@ -384,8 +404,31 @@ export default function QrSelfOrderPage({ params }) {
         }
       }
 
+      // Ambil data order & bill termutakhir dari store
+      const latestOrder = usePosStore.getState().orders.find((o) => o.id === targetOrder.id) || targetOrder;
+      const latestBill = usePosStore.getState().bills.find((b) => b.order_id === targetOrder.id);
+
+      // Sinkronisasikan ke server API agar semua tab / layar kasir / layar KDS langsung menerima
+      try {
+        await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create_order',
+            order: latestOrder,
+            bill: latestBill,
+            tableId: currentTable.id,
+          }),
+        });
+      } catch (e) {
+        console.warn('Gagal sync pesanan ke server API:', e);
+      }
+
+      // Beritahu tab lain di browser secara instan
+      notifyCrossTabSync();
+
       setOrderSuccess({
-        orderNumber: targetOrder.order_number || `ORD-${Date.now().toString().slice(-6)}`,
+        orderNumber: latestOrder.order_number || `ORD-${Date.now().toString().slice(-6)}`,
         tableName: currentTable.name,
         itemCount: cart.reduce((sum, item) => sum + item.qty, 0),
         total: cartTotals.total,

@@ -11,6 +11,21 @@ import { persist } from 'zustand/middleware';
 import { hashPin, verifyPin } from '@/lib/crypto';
 import { playKitchenChime, playOrderReadySound, playAlertSound } from '@/lib/audio';
 
+/**
+ * Broadcast notifikasi sinkronisasi antar-tab/jendela browser
+ */
+export function notifyCrossTabSync() {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const channel = new BroadcastChannel('pos_fb_sync_channel');
+      channel.postMessage({ type: 'STATE_CHANGED', timestamp: Date.now() });
+      channel.close();
+    } catch {
+      // Fallback diam
+    }
+  }
+}
+
 // DATA AWAL DEMO (DITURUNKAN DARI SEED SUPABASE)
 const INITIAL_OUTLET = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -362,7 +377,7 @@ export const usePosStore = create(
 
       deleteTable: (tableId) => {
         // Cek order aktif
-        const activeOrder = get().orders.find((o) => o.table_id === tableId && (o.status === 'open' || o.status === 'sent'));
+        const activeOrder = get().orders.find((o) => o.table_id === tableId && o.status !== 'completed' && o.status !== 'cancelled');
         if (activeOrder) {
           throw new Error('Meja tidak bisa dihapus karena masih memiliki pesanan aktif.');
         }
@@ -539,6 +554,7 @@ export const usePosStore = create(
         }));
 
         get().logAudit('create_order', 'orders', newOrder.id, `Pesanan baru ${orderNumber} dibuat (${totals.total})`);
+        notifyCrossTabSync();
         return newOrder;
       },
 
@@ -570,6 +586,7 @@ export const usePosStore = create(
 
         playKitchenChime();
         get().logAudit('send_to_kitchen', 'orders', orderId, `Pesanan dikirim ke dapur`);
+        notifyCrossTabSync();
       },
 
       // --- TAMBAH ITEM KE PESANAN YANG SUDAH BERJALAN ---
@@ -621,6 +638,7 @@ export const usePosStore = create(
         }));
 
         get().logAudit('add_items', 'orders', orderId, `Tambah item ke pesanan ${order.order_number}`);
+        notifyCrossTabSync();
       },
 
       // --- UPDATE STATUS ITEM (KDS TRANSISI: BARU -> DIPROSES -> SIAP -> DISAJIKAN) ---
@@ -665,6 +683,7 @@ export const usePosStore = create(
           playOrderReadySound();
           get().addNotification('kds_ready', 'Pesanan Siap Disajikan', `Item pada pesanan sudah siap diambil oleh pelayan.`);
         }
+        notifyCrossTabSync();
       },
 
       // --- VOID ITEM PESANAN DENGAN OTORISASI MANAJER ---
@@ -896,6 +915,7 @@ export const usePosStore = create(
 
         playOrderReadySound();
         get().logAudit('payment', 'bills', billId, `Pembayaran ${paymentPayload.method} sebesar ${bill.amount} lunas`);
+        notifyCrossTabSync();
         return newPayment;
       },
 
@@ -1204,9 +1224,66 @@ export const usePosStore = create(
       },
 
       updateDeliveryStatus: (deliveryId, status) => {
+        const { deliveryOrders, orders } = get();
+        const del = deliveryOrders.find((d) => d.id === deliveryId);
+        if (!del) return;
+
+        const now = new Date().toISOString();
+
         set((state) => ({
-          deliveryOrders: state.deliveryOrders.map((d) => (d.id === deliveryId ? { ...d, status } : d)),
+          deliveryOrders: state.deliveryOrders.map((d) =>
+            d.id === deliveryId ? { ...d, status, updated_at: now } : d
+          ),
+          orders: state.orders.map((o) => {
+            if (o.id !== del.order_id) return o;
+
+            if (status === 'completed') {
+              return {
+                ...o,
+                status: 'completed',
+                updated_at: now,
+                items: o.items.map((i) => ({
+                  ...i,
+                  status: i.status === 'void' ? 'void' : 'served',
+                  served_at: i.served_at || now,
+                })),
+              };
+            }
+
+            if (status === 'ready_for_pickup') {
+              return {
+                ...o,
+                status: 'ready',
+                updated_at: now,
+                items: o.items.map((i) => ({
+                  ...i,
+                  status: i.status === 'new' || i.status === 'preparing' ? 'ready' : i.status,
+                  ready_at: i.ready_at || now,
+                })),
+              };
+            }
+
+            if (status === 'rejected') {
+              return {
+                ...o,
+                status: 'cancelled',
+                updated_at: now,
+              };
+            }
+
+            return o;
+          }),
         }));
+
+        if (status === 'completed') {
+          const order = orders.find((o) => o.id === del.order_id);
+          if (order && !order.stock_deducted) {
+            get().deductRecipeStock(order.id);
+          }
+        }
+
+        get().logAudit('update_delivery_status', 'delivery_orders', deliveryId, `Status pengantaran diubah menjadi ${status}`);
+        notifyCrossTabSync();
       },
 
       acceptDeliveryOrder: (deliveryId) => {
@@ -1231,6 +1308,7 @@ export const usePosStore = create(
 
         playKitchenChime();
         get().logAudit('accept_delivery', 'delivery_orders', deliveryId, `Pesanan online ${del.external_id} diterima`);
+        notifyCrossTabSync();
       },
 
       rejectDeliveryOrder: (deliveryId, reason = 'Stok habis / Sibuk') => {
@@ -1248,6 +1326,46 @@ export const usePosStore = create(
         }));
 
         get().logAudit('reject_delivery', 'delivery_orders', deliveryId, `Pesanan online ${del.external_id} ditolak: ${reason}`);
+        notifyCrossTabSync();
+      },
+
+      mergeExternalOrders: (incomingOrders = [], incomingBills = [], incomingTables = []) => {
+        const { orders, bills, tables } = get();
+        let hasNew = false;
+        const currentOrderIds = new Set(orders.map((o) => o.id));
+        const newOrdersToAdd = [];
+
+        incomingOrders.forEach((inOrd) => {
+          if (!currentOrderIds.has(inOrd.id)) {
+            newOrdersToAdd.push(inOrd);
+            hasNew = true;
+          }
+        });
+
+        if (!hasNew && incomingBills.length === 0) return false;
+
+        const updatedOrders = [...newOrdersToAdd, ...orders];
+        let updatedTables = tables;
+        newOrdersToAdd.forEach((no) => {
+          if (no.table_id && no.status !== 'completed' && no.status !== 'cancelled') {
+            updatedTables = updatedTables.map((t) => (t.id === no.table_id ? { ...t, status: 'occupied' } : t));
+          }
+        });
+
+        const currentBillIds = new Set(bills.map((b) => b.id));
+        const newBillsToAdd = incomingBills.filter((b) => !currentBillIds.has(b.id));
+
+        set({
+          orders: updatedOrders,
+          bills: [...bills, ...newBillsToAdd],
+          tables: updatedTables,
+        });
+
+        if (hasNew) {
+          playKitchenChime();
+        }
+
+        return hasNew;
       },
 
       addSkuMapping: (mapping) => {

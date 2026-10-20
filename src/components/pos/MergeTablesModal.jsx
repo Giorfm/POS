@@ -14,7 +14,7 @@ export function MergeTablesModal({ open, onClose, currentTableId }) {
   const [selectedSecondaryId, setSelectedSecondaryId] = useState('');
 
   const currentTable = tables.find((t) => t.id === currentTableId);
-  const currentOrder = orders.find((o) => o.table_id === currentTableId && (o.status === 'open' || o.status === 'sent'));
+  const currentOrder = orders.find((o) => o.table_id === currentTableId && o.status !== 'completed' && o.status !== 'cancelled');
 
   // Meja lain yang tersedia atau terisi tapi belum lunas
   const otherTables = tables.filter((t) => t.id !== currentTableId);
