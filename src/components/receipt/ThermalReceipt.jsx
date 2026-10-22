@@ -58,7 +58,7 @@ export function ThermalReceiptModal({ open, onClose, data }) {
         <div className="py-2 text-[10px] space-y-0.5 border-b border-dashed border-gray-400 text-gray-700">
           <div className="flex justify-between">
             <span>No. Order:</span>
-            <span className="font-bold">{order.order_number}</span>
+            <span className="font-bold">{order?.order_number || '-'}</span>
           </div>
           <div className="flex justify-between">
             <span>Waktu:</span>
@@ -66,11 +66,11 @@ export function ThermalReceiptModal({ open, onClose, data }) {
           </div>
           <div className="flex justify-between">
             <span>Kasir / Meja:</span>
-            <span>{order.customer_name}</span>
+            <span>{order?.customer_name || '-'}</span>
           </div>
           <div className="flex justify-between">
             <span>Tipe:</span>
-            <span className="uppercase font-semibold">{order.type.replace('_', ' ')}</span>
+            <span className="uppercase font-semibold">{(order?.type || 'dine_in').replace('_', ' ')}</span>
           </div>
           {bill?.split_group && (
             <div className="flex justify-between font-semibold text-primary">
@@ -82,11 +82,11 @@ export function ThermalReceiptModal({ open, onClose, data }) {
 
         {/* ITEMS */}
         <div className="py-3 border-b border-dashed border-gray-400 space-y-2">
-          {order.items.map((item, idx) => (
+          {(order?.items || []).map((item, idx) => (
             <div key={idx} className="space-y-0.5">
               <div className="flex justify-between">
                 <span className="font-bold">{item.qty}x {item.name_snapshot}</span>
-                <span>{formatRupiah(item.price_snapshot * item.qty)}</span>
+                <span>{formatRupiah((item.price_snapshot || 0) * item.qty)}</span>
               </div>
               {item.modifiers && item.modifiers.length > 0 && (
                 <div className="pl-4 text-[9px] text-gray-500">
@@ -108,25 +108,25 @@ export function ThermalReceiptModal({ open, onClose, data }) {
         <div className="py-2 space-y-1 border-b border-dashed border-gray-400 text-xs">
           <div className="flex justify-between">
             <span>Subtotal</span>
-            <span>{formatRupiah(bill?.subtotal || order.subtotal)}</span>
+            <span>{formatRupiah(bill?.subtotal || order?.subtotal || 0)}</span>
           </div>
-          {(bill?.discount || order.discount) > 0 && (
+          {(bill?.discount || order?.discount) > 0 && (
             <div className="flex justify-between text-emerald-700">
               <span>Diskon</span>
-              <span>-{formatRupiah(bill?.discount || order.discount)}</span>
+              <span>-{formatRupiah(bill?.discount || order?.discount || 0)}</span>
             </div>
           )}
           <div className="flex justify-between text-gray-600">
             <span>Service (5%)</span>
-            <span>{formatRupiah(bill?.service || order.service)}</span>
+            <span>{formatRupiah(bill?.service || order?.service || 0)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>PB1 / Pajak (10%)</span>
-            <span>{formatRupiah(bill?.tax || order.tax)}</span>
+            <span>{formatRupiah(bill?.tax || order?.tax || 0)}</span>
           </div>
           <div className="flex justify-between font-black text-sm pt-1 border-t border-gray-300">
             <span>TOTAL</span>
-            <span>{formatRupiah(bill?.amount || order.total)}</span>
+            <span>{formatRupiah(bill?.amount || order?.total || 0)}</span>
           </div>
         </div>
 

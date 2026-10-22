@@ -257,6 +257,11 @@ export const usePosStore = create(
       currentUser: INITIAL_PROFILES[2], // Default Rian Pratama (Kasir)
       sessionLocked: false,
       isOffline: false,
+      cloudConnected: false,
+      cloudPending: [],
+      cloudStatus: 'local',
+      cloudError: null,
+      cloudHydrating: false,
 
       // 2. DATA MASTER
       areas: INITIAL_AREAS,
@@ -291,6 +296,7 @@ export const usePosStore = create(
 
       // --- AKSI AUTENTIKASI ---
       loginWithPin: async (pin, userId = null) => {
+        if (get().cloudConnected) throw new Error('Use Connect staff account to change the authenticated staff member.');
         const { profiles } = get();
         const pinHash = await hashPin(pin);
         const user = userId 
@@ -329,6 +335,7 @@ export const usePosStore = create(
       },
 
       switchUser: (userId) => {
+        if (get().cloudConnected) return;
         const user = get().profiles.find((p) => p.id === userId);
         if (user) {
           set({ currentUser: user, sessionLocked: false });
@@ -778,11 +785,20 @@ export const usePosStore = create(
         }
 
         // Ganti bills untuk order ini
-        set((state) => ({
-          bills: [...state.bills.filter((b) => b.order_id !== orderId), ...newBills],
-        }));
+        const updatedBills = [...get().bills.filter((b) => b.order_id !== orderId), ...newBills];
+        set({ bills: updatedBills });
 
         get().logAudit('split_bill_equal', 'orders', orderId, `Split bill rata ${splitCount} orang`);
+        notifyCrossTabSync();
+
+        if (typeof window !== 'undefined' && !get().cloudConnected) {
+          fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'sync_state', bills: updatedBills }),
+          }).catch(() => {});
+        }
+
         return newBills;
       },
 
@@ -845,17 +861,27 @@ export const usePosStore = create(
           };
         });
 
-        set((state) => ({
-          bills: [...state.bills.filter((b) => b.order_id !== orderId), ...finalBills],
-        }));
+        const updatedBills = [...get().bills.filter((b) => b.order_id !== orderId), ...finalBills];
+        set({ bills: updatedBills });
 
         get().logAudit('split_bill_items', 'orders', orderId, `Split bill per item (${groups.length} sub-tagihan)`);
+        notifyCrossTabSync();
+
+        if (typeof window !== 'undefined' && !get().cloudConnected) {
+          fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'sync_state', bills: updatedBills }),
+          }).catch(() => {});
+        }
+
         return finalBills;
       },
 
       // --- PEMBAYARAN BILL (CASH, QRIS, CARD) ---
       payBill: (billId, paymentPayload) => {
-        const { bills, orders, outlet, currentShift } = get();
+        const { bills, orders, outlet, currentShift, currentUser } = get();
+        if (!currentShift || currentShift.user_id !== currentUser?.id) throw new Error('Open your own shift before collecting payment.');
         const bill = bills.find((b) => b.id === billId);
         if (!bill) throw new Error('Tagihan tidak ditemukan');
         if (bill.status === 'paid') throw new Error('Tagihan sudah dibayar');
@@ -869,6 +895,8 @@ export const usePosStore = create(
           id: crypto.randomUUID(),
           bill_id: billId,
           order_id: bill.order_id,
+          user_id: currentUser.id,
+          shift_id: currentShift.id,
           method: paymentPayload.method, // 'cash', 'qris', 'card'
           amount: bill.amount,
           tendered_amount: paymentPayload.tenderedAmount || bill.amount,
@@ -916,6 +944,20 @@ export const usePosStore = create(
         playOrderReadySound();
         get().logAudit('payment', 'bills', billId, `Pembayaran ${paymentPayload.method} sebesar ${bill.amount} lunas`);
         notifyCrossTabSync();
+
+        if (typeof window !== 'undefined' && !get().cloudConnected) {
+          fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'sync_state',
+              bills: updatedBills,
+              orders: updatedOrders,
+              tables: updatedTables,
+            }),
+          }).catch(() => {});
+        }
+
         return newPayment;
       },
 
@@ -1072,7 +1114,7 @@ export const usePosStore = create(
 
       addCashMovement: (type, amount, reason) => {
         const { currentShift, currentUser } = get();
-        if (!currentShift) throw new Error('Tidak ada shift aktif.');
+        if (!currentShift || currentShift.user_id !== currentUser?.id) throw new Error('Open your own shift first.');
 
         const movement = {
           id: crypto.randomUUID(),
@@ -1093,10 +1135,10 @@ export const usePosStore = create(
 
       closeShift: async (actualCash, notes = '', managerPin = null) => {
         const { currentShift, payments, cashMovements, currentUser } = get();
-        if (!currentShift) throw new Error('Tidak ada shift aktif untuk ditutup.');
+        if (!currentShift || currentShift.user_id !== currentUser?.id) throw new Error('You can only close your own shift.');
 
         // Hitung total uang tunai yang diterima selama shift ini
-        const shiftPayments = payments.filter((p) => p.method === 'cash' && new Date(p.paid_at) >= new Date(currentShift.opened_at));
+        const shiftPayments = payments.filter((p) => p.method === 'cash' && p.status === 'success' && p.shift_id === currentShift.id);
         const totalCashSales = shiftPayments.reduce((sum, p) => sum + p.amount, 0);
 
         // Kas Masuk & Kas Keluar
@@ -1108,9 +1150,15 @@ export const usePosStore = create(
         const variance = Number(actualCash) - expectedCash;
 
         let approverId = currentUser.id;
-        if (Math.abs(variance) > 0 && managerPin) {
-          const manager = await get().verifyManagerPin(managerPin);
-          if (manager) approverId = manager.id;
+        if (Math.abs(variance) > 0) {
+          if (get().cloudConnected) {
+            // Variances remain recorded for manager review in the main dashboard.
+            approverId = null;
+          } else {
+            const manager = managerPin ? await get().verifyManagerPin(managerPin) : null;
+            if (!manager) throw new Error('Valid manager PIN required for a cash variance.');
+            approverId = manager.id;
+          }
         }
 
         const closedShift = {
@@ -1135,6 +1183,7 @@ export const usePosStore = create(
 
       // --- INTEGRASI PESANAN ONLINE DELIVERY (MOCK SIMULATOR) ---
       simulateDeliveryOrder: (platform = 'gofood') => {
+        if (get().cloudConnected) throw new Error('Delivery simulator is available only in local demo mode.');
         const { products, skuMappings, outlet } = get();
         // Ambil produk acak
         const randomProduct = products[0] || INITIAL_PRODUCTS[0];
@@ -1353,7 +1402,10 @@ export const usePosStore = create(
         });
 
         const currentBillIds = new Set(bills.map((b) => b.id));
-        const newBillsToAdd = incomingBills.filter((b) => !currentBillIds.has(b.id));
+        const newOrderIdsSet = new Set(newOrdersToAdd.map((o) => o.id));
+        const newBillsToAdd = incomingBills.filter(
+          (b) => newOrderIdsSet.has(b.order_id) && !currentBillIds.has(b.id)
+        );
 
         set({
           orders: updatedOrders,
@@ -1581,6 +1633,10 @@ export const usePosStore = create(
     {
       name: 'pos-fb-storage',
       partialize: (state) => ({
+        cloudConnected: state.cloudConnected,
+        cloudPending: state.cloudPending,
+        cloudStatus: state.cloudStatus,
+        profiles: state.profiles,
         outlet: state.outlet,
         currentUser: state.currentUser,
         areas: state.areas,

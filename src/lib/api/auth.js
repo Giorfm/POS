@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 
-const DEFAULT_API_KEY = 'ag_live_pos_dashboard_secret_key_2026';
+
 
 /**
  * Validasi header X-API-Key dari request HTTP
@@ -13,13 +13,12 @@ const DEFAULT_API_KEY = 'ag_live_pos_dashboard_secret_key_2026';
  * @returns {NextResponse | null} Mengembalikan null jika valid, atau NextResponse 401 jika gagal
  */
 export function validateApiKey(request) {
-  const expectedKey = process.env.MAIN_DASHBOARD_API_KEY || DEFAULT_API_KEY;
+  const expectedKey = process.env.MAIN_DASHBOARD_API_KEY;
   const providedKey =
     request.headers.get('x-api-key') ||
-    request.headers.get('X-API-Key') ||
-    new URL(request.url).searchParams.get('api_key');
+    request.headers.get('X-API-Key');
 
-  if (!providedKey || providedKey !== expectedKey) {
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
     return NextResponse.json(
       {
         error: 'Unauthorized',

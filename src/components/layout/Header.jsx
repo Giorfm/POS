@@ -196,28 +196,9 @@ export function Header() {
             {showUserDropdown && (
               <div className="absolute right-0 mt-2 w-64 rounded-2xl border bg-popover p-2 shadow-2xl z-50 animate-in fade-in-0 zoom-in-95">
                 <div className="px-3 py-2 border-b mb-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Ganti Karyawan Cepat</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Akun Karyawan</p>
                 </div>
-                <div className="space-y-1">
-                  {profiles.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        switchUser(p.id);
-                        setShowUserDropdown(false);
-                      }}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-xs transition-colors ${
-                        p.id === currentUser?.id ? 'bg-primary text-primary-foreground font-bold' : 'hover:bg-muted text-foreground'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="uppercase font-mono text-[10px]">{p.role}</span>
-                        <span>{p.name}</span>
-                      </div>
-                      {p.id === currentUser?.id && <UserCheck className="h-4 w-4" />}
-                    </button>
-                  ))}
-                </div>
+                <p className="p-3 text-xs text-muted-foreground">Untuk berganti karyawan, pilih “Keluar / ganti akun”, lalu masuk dengan akun karyawan tersebut.</p>
               </div>
             )}
           </div>
