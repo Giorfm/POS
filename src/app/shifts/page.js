@@ -62,7 +62,7 @@ export default function ShiftsManagementPage() {
 
   // Perhitungan Keuangan Shift Aktif Saat Ini
   const shiftCashPayments = currentShift
-    ? payments.filter((p) => p.method === 'cash' && new Date(p.paid_at) >= new Date(currentShift.opened_at))
+    ? payments.filter((p) => p.method === 'cash' && p.status === 'success' && p.shift_id === currentShift.id)
     : [];
   const totalCashSales = shiftCashPayments.reduce((acc, p) => acc + p.amount, 0);
 
@@ -127,7 +127,7 @@ export default function ShiftsManagementPage() {
     const variance = actual - expectedCashNow;
 
     // Jika ada selisih kas fisik vs ekspektasi sistem, wajib PIN Manajer!
-    if (Math.abs(variance) > 0) {
+    if (Math.abs(variance) > 0 && !usePosStore.getState().cloudConnected) {
       setPendingCloseData({ actual, notes: closeNotes, variance });
       setIsManagerAuthOpen(true);
     } else {

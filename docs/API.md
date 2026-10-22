@@ -280,3 +280,7 @@ Endpoint notifikasi settlement dari payment gateway (Midtrans, Xendit, atau ASPI
   }
 }
 ```
+
+## Supabase staff-performance integration (2026-10-22)
+
+The summary, sales and shifts endpoints now read Supabase instead of sample data; a new `/api/v1/staff-performance` endpoint is available. Their current contract, authentication, metric definitions, provisioning steps and limitations are documented in [DASHBOARD_HANDOFF.md](./DASHBOARD_HANDOFF.md). Earlier sample responses in this document are superseded for these endpoints.

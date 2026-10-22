@@ -5,6 +5,7 @@ import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 const ToastContext = createContext({
   showToast: () => {},
+  addToast: () => {},
 });
 
 export function ToastProvider({ children }) {
@@ -24,7 +25,7 @@ export function ToastProvider({ children }) {
   };
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, addToast: showToast }}>
       {children}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none p-2">
         {toasts.map((toast) => (

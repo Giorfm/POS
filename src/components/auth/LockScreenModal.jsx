@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase/client';
 import { usePosStore } from '@/lib/store/usePosStore';
 import { Lock, Delete, Users, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +34,7 @@ export function LockScreenModal() {
   }, [lockSession]);
 
   if (!sessionLocked) return null;
+  if (usePosStore.getState().cloudConnected) return <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center gap-4"><p>Session locked. Enter your staff password.</p><form onSubmit={async e => { e.preventDefault(); setLoading(true); const { data: { session } } = await supabase.auth.getSession(); const { error: authError } = await supabase.auth.signInWithPassword({ email: session?.user.email || '', password: pin }); setLoading(false); if (authError) setError(authError.message); else { usePosStore.setState({ sessionLocked: false }); setPin(''); } }}><input aria-label="Staff password" type="password" value={pin} onChange={e => setPin(e.target.value)} className="border p-2 rounded" /><button disabled={loading} className="p-2">Unlock</button><p role="alert">{error}</p></form></div>;
 
   const handleDigit = (digit) => {
     if (pin.length < 6) {

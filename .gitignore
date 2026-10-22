@@ -32,3 +32,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Isolated verification build
+.next-verify/
+
+# Supabase CLI local cache
+supabase/.temp/
